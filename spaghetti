@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+autoload :FileUtils, "fileutils"
+autoload :YAML, "yaml"
+
+SAUCE_DIR = File.expand_path("~/.spaghetti")
+SAUCE_PATH = "#{SAUCE_DIR}/sauce.yml"
+FROM = ["from"]
+TO = ["to", "into"]
+
+command, *arguments = ARGV
+
+case command
+when "add"
+  # Require at least two language entries
+  if arguments.length < 4
+    raise ArgumentError, "Attempting to add a word without any translations"
+  end
+  
+  # Write to file
+  File.open(SAUCE_PATH, "a") do |file|
+    file.puts "-"
+
+    # Step 2 to capture each pair
+    0.step(arguments.length - 1, 2).each do |i|
+      # The first of each pair is the language, the second is the word
+      language, word = arguments[i..i+1]
+
+      # Write language entry
+      file.puts "  #{language[0..1]}: #{word}"
+    end
+  end
+when "convert"
+  # Make directory for dictionary if it doesn't already exist
+  FileUtils.mkdir(SAUCE_DIR) unless File.directory?(SAUCE_DIR)
+
+  if File.exists?(SAUCE_PATH)
+    sauce = YAML.load_file(SAUCE_PATH)
+  else
+    sauce = []
+  end
+
+  # Validate arguments
+  raise ArgumentError, "Too few arguments" unless arguments.length >= 5
+
+  # Get last four arguments as language parameters
+  language_params = arguments[-4..-1]
+
+  # Get languages as first two letters of from and to arguments
+  if FROM.include?(language_params[0]) && TO.include?(language_params[2])
+    from_lang = language_params[1][0..1]
+    to_lang   = language_params[3][0..1]
+  elsif TO.include?(language_params[0]) && FROM.include?(language_params[2])
+    to_lang   = language_params[1][0..1]
+    from_lang = language_params[3][0..1]
+  else
+    raise ArgumentError, "Last four words must state which language to convert" +
+      "to and from.\nFor example: from english to japanese"
+  end
+
+  # All but the last 
+  file_names = arguments[0..-5]
+
+  file_names.each do |file_name|
+    full_path = File.expand_path(file_name)
+    text = File.read(full_path)
+
+    # Replace each instance of dictionary
+    sauce.each do |noodle|
+      if noodle.include?(from_lang) && noodle.include?(to_lang)
+        text.gsub! noodle[from_lang], noodle[to_lang]
+      end
+    end
+    
+    # Write to file
+    File.open(full_path, "w") do |file|
+      file.puts text
+    end
+  end
+when "sauce"
+  exec "vim ~/.spaghetti/sauce.yml"
+else
+  puts "Please enter a valid command: add, convert, sauce"
+end
